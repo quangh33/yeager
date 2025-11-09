@@ -5,20 +5,22 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	collector "yeager/cmd/collector/processor"
 	"yeager/pkg/model"
 	"yeager/pkg/storage"
 )
 
-type APIHandler struct {
-	storage storage.Storage
+type Handler struct {
+	storage   storage.Storage
+	processor *collector.SpanProcessor
 }
 
-func NewAPIHandler(s storage.Storage) *APIHandler {
-	return &APIHandler{storage: s}
+func NewAPIHandler(s storage.Storage, p *collector.SpanProcessor) *Handler {
+	return &Handler{storage: s, processor: p}
 }
 
 // SubmitSpanHandler accepts a JSON representation of a Span and saves it.
-func (h *APIHandler) SubmitSpanHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SubmitSpanHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
 		return
@@ -40,20 +42,14 @@ func (h *APIHandler) SubmitSpanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Write to storage
-	err := h.storage.WriteSpan(r.Context(), &span)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to store span: %v", err), http.StatusInternalServerError)
-		return
-	}
-
+	h.processor.ProcessSpan(&span)
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte("Span accepted"))
 }
 
 // GetTraceHandler retrieves a trace by its ID.
 // Endpoint: GET /api/traces/{trace_id}
-func (h *APIHandler) GetTraceHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetTraceHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Only GET allowed", http.StatusMethodNotAllowed)
 		return
