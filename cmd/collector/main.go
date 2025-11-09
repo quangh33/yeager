@@ -36,7 +36,7 @@ func main() {
 
 	port := ":8080"
 	log.Printf("Yeager Collector starting on port %s...", port)
-	log.Printf("Simple Yaeger UI available at http://localhost%s", port)
+	log.Printf("Simple Yeager UI available at http://localhost%s", port)
 	if err := http.ListenAndServe(port, mux); err != nil {
 		log.Fatalf("Server successfully failed to start: %v", err)
 	}
