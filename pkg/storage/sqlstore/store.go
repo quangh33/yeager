@@ -38,8 +38,8 @@ func (s *Store) WriteSpan(ctx context.Context, span *model.Span) error {
 	}
 
 	query := `
-    INSERT INTO spans (trace_id, span_id, parent_id, operation_name, start_time, end_time, data)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO spans (trace_id, span_id, parent_id, operation_name, service_name, start_time, end_time, data)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `
 
 	_, err = s.db.ExecContext(ctx, query,
@@ -47,6 +47,7 @@ func (s *Store) WriteSpan(ctx context.Context, span *model.Span) error {
 		span.SpanID,
 		span.ParentSpanID,
 		span.OperationName,
+		span.Process.ServiceName,
 		span.StartTime,
 		span.EndTime,
 		string(data),
@@ -94,4 +95,33 @@ func (s *Store) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Tra
 	}
 
 	return trace, nil
+}
+
+func (s *Store) GetDependencies(ctx context.Context) ([]model.DependencyLink, error) {
+	query := `
+    SELECT
+        parent.service_name,
+        child.service_name,
+        COUNT(*)
+    FROM spans AS child
+    JOIN spans AS parent ON child.parent_id = parent.span_id
+    WHERE child.service_name != parent.service_name
+    GROUP BY parent.service_name, child.service_name
+    `
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []model.DependencyLink
+	for rows.Next() {
+		var link model.DependencyLink
+		if err := rows.Scan(&link.Parent, &link.Child, &link.CallCount); err != nil {
+			return nil, err
+		}
+		links = append(links, link)
+	}
+	return links, nil
 }

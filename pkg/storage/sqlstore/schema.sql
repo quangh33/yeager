@@ -5,8 +5,10 @@ CREATE TABLE IF NOT EXISTS spans (
      operation_name VARCHAR(255) NOT NULL,
      start_time DATETIME NOT NULL,
      end_time DATETIME NOT NULL,
+     service_name VARCHAR(255) NOT NULL,
      data TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_trace_id ON spans(trace_id);
 CREATE INDEX IF NOT EXISTS idx_operation_name ON spans(operation_name);
 CREATE INDEX IF NOT EXISTS idx_start_time ON spans(start_time);
+CREATE INDEX IF NOT EXISTS idx_service_name ON spans(service_name);

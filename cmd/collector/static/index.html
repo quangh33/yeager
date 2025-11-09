@@ -3,49 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Jaeger UI</title>
+    <title>Yeager UI</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
 </head>
 <body>
 <div class="header">
-    <h2>🔭 Simple Yeager UI</h2>
+    <h2>🔭 Simple Jaeger UI</h2>
+</div>
+
+<div class="nav-tabs">
+    <div class="nav-tab active" onclick="switchView('trace-view')">Trace Search</div>
+    <div class="nav-tab" onclick="switchView('dependency-view')">Dependency Graph</div>
 </div>
 
 <div class="container">
-    <div class="search-box">
-        <input type="text" id="traceIdInput" placeholder="Enter Trace ID (e.g., trace-1)" value="trace-1" />
-        <button onclick="loadTrace()">Find Trace</button>
+    <div id="trace-view" class="view-container active">
+        <div class="search-box">
+            <input type="text" id="traceIdInput" placeholder="Enter Trace ID (e.g., trace-1)" />
+            <button onclick="loadTrace()">Find Trace</button>
+        </div>
+        <div id="trace-output"></div>
     </div>
 
-    <div id="output">
+    <div id="dependency-view" class="view-container">
+        <div class="trace-header" style="margin-bottom: 1rem; background: transparent; border: none; padding-left: 0;">
+            <h3>Service Dependencies</h3>
+        </div>
+        <button onclick="loadDependencies()" style="margin-bottom: 1rem;">Refresh Graph</button>
+        <div id="cy"></div>
     </div>
 </div>
 
 <script>
-    // Allow 'Enter' key to trigger search
+    function switchView(viewId) {
+        // Hide all views, remove active class from tabs
+        document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+
+        // Show selected view, add active class to clicked tab
+        document.getElementById(viewId).classList.add('active');
+        event.target.classList.add('active');
+
+        // Auto-load dependencies if switching to that tab
+        if (viewId === 'dependency-view') {
+            loadDependencies();
+        }
+    }
+
     document.getElementById("traceIdInput").addEventListener("keyup", function(event) {
         if (event.key === "Enter") loadTrace();
     });
 
     async function loadTrace() {
         const traceId = document.getElementById('traceIdInput').value.trim();
-        const output = document.getElementById('output');
-
-        if (!traceId) {
-            output.innerHTML = '<div class="error-msg">Please enter a Trace ID</div>';
-            return;
-        }
-
-        output.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Loading trace data...</div>';
-
+        const output = document.getElementById('trace-output');
+        if (!traceId) { output.innerHTML = '<div class="error-msg">Please enter a Trace ID</div>'; return; }
+        output.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">Loading...</div>';
         try {
             const resp = await fetch(`/api/traces/${traceId}`);
-            if (!resp.ok) {
-                if (resp.status === 404) throw new Error("Trace not found");
-                throw new Error(await resp.text());
-            }
-            const trace = await resp.json();
-            renderTrace(trace, output);
+            if (!resp.ok) throw new Error(resp.status === 404 ? "Trace not found" : await resp.text());
+            renderTrace(await resp.json(), output);
         } catch (err) {
             output.innerHTML = `<div class="trace-container"><div class="error-msg">Error: ${err.message}</div></div>`;
         }
@@ -53,69 +71,128 @@
 
     function renderTrace(trace, container) {
         if (!trace.spans || trace.spans.length === 0) {
-            container.innerHTML = '<div class="trace-container"><div style="padding: 20px;">No spans found for this trace.</div></div>';
+            container.innerHTML = '<div class="trace-container"><div style="padding:20px;">No spans found.</div></div>';
             return;
         }
-
-        // 1. Calculate timeline bounds
-        let minStart = Number.MAX_SAFE_INTEGER;
-        let maxEnd = Number.MIN_SAFE_INTEGER;
-
+        let minStart = Number.MAX_SAFE_INTEGER, maxEnd = Number.MIN_SAFE_INTEGER;
         trace.spans.forEach(s => {
-            const start = new Date(s.start_time).getTime();
-            const end = new Date(s.end_time).getTime();
-            if (start < minStart) minStart = start;
-            if (end > maxEnd) maxEnd = end;
+            minStart = Math.min(minStart, new Date(s.start_time).getTime());
+            maxEnd = Math.max(maxEnd, new Date(s.end_time).getTime());
         });
-
-        const totalDuration = maxEnd - minStart;
-
-        // 2. Sort by start time
+        const totalDur = maxEnd - minStart;
         trace.spans.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
 
-        // 3. Build Header
         let html = `
                 <div class="trace-container">
                     <div class="trace-header">
                         <h3>Trace: ${trace.trace_id}</h3>
-                        <div class="trace-summary">
-                            <strong>${trace.spans.length}</strong> spans |
-                            Total duration: <strong>${totalDuration}ms</strong>
-                        </div>
+                        <div class="trace-summary"><strong>${trace.spans.length}</strong> spans | Total: <strong>${totalDur}ms</strong></div>
                     </div>
-                    <div class="trace-body">
-            `;
-
-        // 4. Build rows
+                    <div class="trace-body">`;
         trace.spans.forEach(span => {
             const start = new Date(span.start_time).getTime();
-            const end = new Date(span.end_time).getTime();
-            const duration = end - start;
-            const serviceName = span.process ? span.process.service_name : 'unknown';
-
-            // Calculate percentages for CSS positioning
-            // We use a slight offset (0.1%) to ensure bars don't start exactly at the edge if 0
-            const leftPercent = ((start - minStart) / totalDuration) * 100;
-            // Ensure even 0ms spans have a tiny width to be visible
-            const widthPercent = Math.max(((duration / totalDuration) * 100), 0.2);
-
+            const dur = new Date(span.end_time).getTime() - start;
+            const svc = span.process ? span.process.service_name : 'unknown';
+            const left = ((start - minStart) / totalDur) * 100;
+            const width = Math.max(((dur / totalDur) * 100), 0.2);
             html += `
                     <div class="span-row">
-                        <div class="span-info" title="Service: ${serviceName}\nOperation: ${span.operation_name}\nDuration: ${duration}ms">
-                            <span class="service-tag">${serviceName}</span>
-                            <span style="overflow:hidden; text-overflow:ellipsis;">${span.operation_name}</span>
+                        <div class="span-info" title="${svc}: ${span.operation_name} (${dur}ms)">
+                            <span class="service-tag">${svc}</span>
+                            <span style="overflow:hidden;text-overflow:ellipsis;">${span.operation_name}</span>
                         </div>
                         <div class="timeline-container">
-                            <div class="span-bar" style="left: ${leftPercent}%; width: ${widthPercent}%;">
-                                 <span class="span-duration">${duration}ms</span>
+                            <div class="span-bar" style="left:${left}%;width:${width}%;">
+                                <span class="span-duration">${dur}ms</span>
                             </div>
                         </div>
-                    </div>
-                `;
+                    </div>`;
+        });
+        container.innerHTML = html + '</div></div>';
+    }
+
+    let cy = null;
+    async function loadDependencies() {
+        try {
+            const resp = await fetch('/api/dependencies');
+            if (!resp.ok) throw new Error(await resp.text());
+            const links = await resp.json();
+            renderGraph(links || []);
+        } catch (err) {
+            document.getElementById('cy').innerHTML = `<div class="error-msg">Failed to load graph: ${err.message}</div>`;
+        }
+    }
+
+    function renderGraph(links) {
+        const elements = [];
+        const nodes = new Set();
+
+        // Transform API data into Cytoscape elements
+        links.forEach(link => {
+            if (!nodes.has(link.parent)) {
+                elements.push({ data: { id: link.parent, label: link.parent } });
+                nodes.add(link.parent);
+            }
+            if (!nodes.has(link.child)) {
+                elements.push({ data: { id: link.child, label: link.child } });
+                nodes.add(link.child);
+            }
+            elements.push({
+                data: {
+                    source: link.parent,
+                    target: link.child,
+                    label: link.callCount + ' calls'
+                }
+            });
         });
 
-        html += '</div></div>';
-        container.innerHTML = html;
+        cy = cytoscape({
+            container: document.getElementById('cy'),
+            elements: elements,
+            style: [ // The graph stylesheet
+                {
+                    selector: 'node',
+                    style: {
+                        'background-color': '#3498db',
+                        'label': 'data(label)',
+                        'color': '#333',
+                        'font-size': '14px',
+                        'font-weight': 'bold',
+                        'text-valign': 'center',
+                        'text-halign': 'center',
+                        'width': 'label',
+                        'height': '40px',
+                        'padding': '10px',
+                        'shape': 'round-rectangle',
+                        'text-wrap': 'wrap'
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2,
+                        'line-color': '#ccc',
+                        'target-arrow-color': '#ccc',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier',
+                        'label': 'data(label)',
+                        'font-size': '10px',
+                        'color': '#666',
+                        'text-rotation': 'autorotate',
+                        'text-background-color': '#fff',
+                        'text-background-opacity': 1,
+                        'text-background-padding': '2px'
+
+                    }
+                }
+            ],
+            layout: {
+                name: 'breadthfirst',
+                directed: true,
+                padding: 50,
+                spacingFactor: 1.5
+            }
+        });
     }
 </script>
 </body>

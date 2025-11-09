@@ -13,7 +13,8 @@ import (
 
 func main() {
 	log.Println("🔌 Connecting to SQLite database...")
-	db, err := sql.Open("sqlite", "traces.db")
+	db, err := sql.Open("sqlite",
+		"file:traces.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
@@ -30,6 +31,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/spans", apiHandler.SubmitSpanHandler)
 	mux.HandleFunc("/api/traces/", apiHandler.GetTraceHandler)
+	mux.HandleFunc("/api/dependencies", apiHandler.GetDependenciesHandler)
 
 	fs := http.FileServer(http.Dir("./cmd/collector/static"))
 	mux.Handle("/", fs)

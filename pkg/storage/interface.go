@@ -12,6 +12,7 @@ type SpanWriter interface {
 type SpanReader interface {
 	// GetTrace retrieves all spans associated with a given TraceID.
 	GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error)
+	GetDependencies(ctx context.Context) ([]model.DependencyLink, error)
 }
 
 type Storage interface {

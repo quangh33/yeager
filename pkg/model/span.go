@@ -40,3 +40,10 @@ type Trace struct {
 	TraceID TraceID `json:"trace_id"`
 	Spans   []*Span `json:"spans"`
 }
+
+// DependencyLink shows a call from one service to another.
+type DependencyLink struct {
+	Parent    string `json:"parent"`
+	Child     string `json:"child"`
+	CallCount uint64 `json:"callCount"`
+}

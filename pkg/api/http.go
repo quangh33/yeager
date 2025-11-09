@@ -72,3 +72,16 @@ func (h *Handler) GetTraceHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(trace)
 }
+
+// GetDependenciesHandler returns the service dependency graph.
+// Endpoint: GET /api/dependencies
+func (h *Handler) GetDependenciesHandler(w http.ResponseWriter, r *http.Request) {
+	links, err := h.storage.GetDependencies(r.Context())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get dependencies: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(links)
+}

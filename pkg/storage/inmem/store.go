@@ -46,3 +46,8 @@ func (s *Store) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Tra
 
 	return trace, nil
 }
+
+func (s *Store) GetDependencies(ctx context.Context) ([]model.DependencyLink, error) {
+	// We don't support this for in-memory yet.
+	return nil, nil
+}
