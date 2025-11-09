@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Jaeger UI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="header">
+    <h2>🔭 Simple Yeager UI</h2>
+</div>
+
+<div class="container">
+    <div class="search-box">
+        <input type="text" id="traceIdInput" placeholder="Enter Trace ID (e.g., trace-1)" value="trace-1" />
+        <button onclick="loadTrace()">Find Trace</button>
+    </div>
+
+    <div id="output">
+    </div>
+</div>
+
+<script>
+    // Allow 'Enter' key to trigger search
+    document.getElementById("traceIdInput").addEventListener("keyup", function(event) {
+        if (event.key === "Enter") loadTrace();
+    });
+
+    async function loadTrace() {
+        const traceId = document.getElementById('traceIdInput').value.trim();
+        const output = document.getElementById('output');
+
+        if (!traceId) {
+            output.innerHTML = '<div class="error-msg">Please enter a Trace ID</div>';
+            return;
+        }
+
+        output.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Loading trace data...</div>';
+
+        try {
+            const resp = await fetch(`/api/traces/${traceId}`);
+            if (!resp.ok) {
+                if (resp.status === 404) throw new Error("Trace not found");
+                throw new Error(await resp.text());
+            }
+            const trace = await resp.json();
+            renderTrace(trace, output);
+        } catch (err) {
+            output.innerHTML = `<div class="trace-container"><div class="error-msg">Error: ${err.message}</div></div>`;
+        }
+    }
+
+    function renderTrace(trace, container) {
+        if (!trace.spans || trace.spans.length === 0) {
+            container.innerHTML = '<div class="trace-container"><div style="padding: 20px;">No spans found for this trace.</div></div>';
+            return;
+        }
+
+        // 1. Calculate timeline bounds
+        let minStart = Number.MAX_SAFE_INTEGER;
+        let maxEnd = Number.MIN_SAFE_INTEGER;
+
+        trace.spans.forEach(s => {
+            const start = new Date(s.start_time).getTime();
+            const end = new Date(s.end_time).getTime();
+            if (start < minStart) minStart = start;
+            if (end > maxEnd) maxEnd = end;
+        });
+
+        const totalDuration = maxEnd - minStart;
+
+        // 2. Sort by start time
+        trace.spans.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+        // 3. Build Header
+        let html = `
+                <div class="trace-container">
+                    <div class="trace-header">
+                        <h3>Trace: ${trace.trace_id}</h3>
+                        <div class="trace-summary">
+                            <strong>${trace.spans.length}</strong> spans |
+                            Total duration: <strong>${totalDuration}ms</strong>
+                        </div>
+                    </div>
+                    <div class="trace-body">
+            `;
+
+        // 4. Build rows
+        trace.spans.forEach(span => {
+            const start = new Date(span.start_time).getTime();
+            const end = new Date(span.end_time).getTime();
+            const duration = end - start;
+            const serviceName = span.process ? span.process.service_name : 'unknown';
+
+            // Calculate percentages for CSS positioning
+            // We use a slight offset (0.1%) to ensure bars don't start exactly at the edge if 0
+            const leftPercent = ((start - minStart) / totalDuration) * 100;
+            // Ensure even 0ms spans have a tiny width to be visible
+            const widthPercent = Math.max(((duration / totalDuration) * 100), 0.2);
+
+            html += `
+                    <div class="span-row">
+                        <div class="span-info" title="Service: ${serviceName}\nOperation: ${span.operation_name}\nDuration: ${duration}ms">
+                            <span class="service-tag">${serviceName}</span>
+                            <span style="overflow:hidden; text-overflow:ellipsis;">${span.operation_name}</span>
+                        </div>
+                        <div class="timeline-container">
+                            <div class="span-bar" style="left: ${leftPercent}%; width: ${widthPercent}%;">
+                                 <span class="span-duration">${duration}ms</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+        });
+
+        html += '</div></div>';
+        container.innerHTML = html;
+    }
+</script>
+</body>
+</html>
