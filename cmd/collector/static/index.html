@@ -9,16 +9,16 @@
 </head>
 <body>
 <div class="header">
-    <h2>🔭 Simple Jaeger UI</h2>
+    <h2>🔭 Yeager UI</h2>
 </div>
 
 <div class="nav-tabs">
-    <div class="nav-tab active" onclick="switchView('trace-view')">Trace Search</div>
-    <div class="nav-tab" onclick="switchView('dependency-view')">Dependency Graph</div>
+    <div class="nav-tab" onclick="switchView('trace-view')">Trace Search</div>
+    <div class="nav-tab active" onclick="switchView('dependency-view')">Dependency Graph</div>
 </div>
 
 <div class="container">
-    <div id="trace-view" class="view-container active">
+    <div id="trace-view" class="view-container">
         <div class="search-box">
             <input type="text" id="traceIdInput" placeholder="Enter Trace ID (e.g., trace-1)" />
             <button onclick="loadTrace()">Find Trace</button>
@@ -26,7 +26,7 @@
         <div id="trace-output"></div>
     </div>
 
-    <div id="dependency-view" class="view-container">
+    <div id="dependency-view" class="view-container active">
         <div class="trace-header" style="margin-bottom: 1rem; background: transparent; border: none; padding-left: 0;">
             <h3>Service Dependencies</h3>
         </div>
@@ -55,6 +55,7 @@
         if (event.key === "Enter") loadTrace();
     });
 
+    loadDependencies();
     async function loadTrace() {
         const traceId = document.getElementById('traceIdInput').value.trim();
         const output = document.getElementById('trace-output');
