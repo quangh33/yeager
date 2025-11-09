@@ -36,16 +36,24 @@
 </div>
 
 <script>
+    function getColor(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const hue = Math.abs(hash % 360);
+        return `hsl(${hue}, 70%, 60%)`;
+    }
+
+    // === TAB SWITCHING LOGIC ===
     function switchView(viewId) {
-        // Hide all views, remove active class from tabs
         document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
-
-        // Show selected view, add active class to clicked tab
         document.getElementById(viewId).classList.add('active');
-        event.target.classList.add('active');
+        const tabs = document.querySelectorAll('.nav-tab');
+        if (viewId === 'trace-view') tabs[1].classList.add('active');
+        else tabs[0].classList.add('active');
 
-        // Auto-load dependencies if switching to that tab
         if (viewId === 'dependency-view') {
             loadDependencies();
         }
@@ -94,16 +102,18 @@
             const start = new Date(span.start_time).getTime();
             const dur = new Date(span.end_time).getTime() - start;
             const svc = span.process ? span.process.service_name : 'unknown';
+            const svcColor = getColor(svc);
+
             const left = ((start - minStart) / totalDur) * 100;
             const width = Math.max(((dur / totalDur) * 100), 0.2);
             html += `
                     <div class="span-row">
                         <div class="span-info" title="${svc}: ${span.operation_name} (${dur}ms)">
-                            <span class="service-tag">${svc}</span>
+                            <span class="service-tag" style="background-color:${svcColor};color:#fff;">${svc}</span>
                             <span style="overflow:hidden;text-overflow:ellipsis;">${span.operation_name}</span>
                         </div>
                         <div class="timeline-container">
-                            <div class="span-bar" style="left:${left}%;width:${width}%;">
+                            <div class="span-bar" style="left:${left}%;width:${width}%;background-color:${svcColor};">
                                 <span class="span-duration">${dur}ms</span>
                             </div>
                         </div>
@@ -128,33 +138,28 @@
         const elements = [];
         const nodes = new Set();
 
-        // Transform API data into Cytoscape elements
         links.forEach(link => {
             if (!nodes.has(link.parent)) {
-                elements.push({ data: { id: link.parent, label: link.parent } });
+                elements.push({ data: { id: link.parent, label: link.parent, color: getColor(link.parent) } });
                 nodes.add(link.parent);
             }
             if (!nodes.has(link.child)) {
-                elements.push({ data: { id: link.child, label: link.child } });
+                elements.push({ data: { id: link.child, label: link.child, color: getColor(link.child) } });
                 nodes.add(link.child);
             }
             elements.push({
-                data: {
-                    source: link.parent,
-                    target: link.child,
-                    label: link.callCount + ' calls'
-                }
+                data: { source: link.parent, target: link.child, label: link.callCount + ' calls' }
             });
         });
 
         cy = cytoscape({
             container: document.getElementById('cy'),
             elements: elements,
-            style: [ // The graph stylesheet
+            style: [
                 {
                     selector: 'node',
                     style: {
-                        'background-color': '#3498db',
+                        'background-color': 'data(color)',
                         'label': 'data(label)',
                         'color': '#333',
                         'font-size': '14px',
@@ -162,8 +167,8 @@
                         'text-valign': 'center',
                         'text-halign': 'center',
                         'width': 'label',
-                        'height': '40px',
-                        'padding': '10px',
+                        'height': 'label',
+                        'padding': '12px',
                         'shape': 'round-rectangle',
                         'text-wrap': 'wrap'
                     }
@@ -183,7 +188,6 @@
                         'text-background-color': '#fff',
                         'text-background-opacity': 1,
                         'text-background-padding': '2px'
-
                     }
                 }
             ],
