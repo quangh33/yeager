@@ -13,7 +13,7 @@ var t *tracer.Tracer
 
 func main() {
 	t = tracer.NewTracer("http://localhost:8080", "checkout-service")
-
+	defer t.Close()
 	log.Println("Starting example shop app...")
 
 	performCheckout(context.Background(), "cart-abc-123", 150.00)
