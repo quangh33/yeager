@@ -55,7 +55,7 @@ func main() {
 func performCheckout(ctx context.Context, cartID string, total float64) {
 	ctx, span := checkoutTracer.StartSpan(ctx, "checkout")
 	defer span.Finish()
-
+	fmt.Printf("trace id: %s\n", span.TraceID)
 	span.SetTag("cart_id", cartID)
 	span.SetTag("total", fmt.Sprintf("%.2f", total))
 	log.Printf("[%s] Checkout started", cartID)
