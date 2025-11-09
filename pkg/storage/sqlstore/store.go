@@ -13,6 +13,9 @@ import (
 //go:embed schema.sql
 var schemaSQL string
 
+//go:embed deplinks.sql
+var getDepLinksSQL string
+
 type Store struct {
 	db *sql.DB
 }
@@ -98,18 +101,7 @@ func (s *Store) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Tra
 }
 
 func (s *Store) GetDependencies(ctx context.Context) ([]model.DependencyLink, error) {
-	query := `
-    SELECT
-        parent.service_name,
-        child.service_name,
-        COUNT(*)
-    FROM spans AS child
-    JOIN spans AS parent ON child.parent_id = parent.span_id
-    WHERE child.service_name != parent.service_name
-    GROUP BY parent.service_name, child.service_name
-    `
-
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := s.db.QueryContext(ctx, getDepLinksSQL)
 	if err != nil {
 		return nil, err
 	}
