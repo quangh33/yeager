@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"embed"
+	"io/fs"
 	"log"
 	"net/http"
 	collector "yeager/cmd/collector/processor"
@@ -10,6 +12,9 @@ import (
 
 	_ "modernc.org/sqlite"
 )
+
+//go:embed static
+var staticEmbed embed.FS
 
 func main() {
 	log.Println("🔌 Connecting to SQLite database...")
@@ -33,8 +38,8 @@ func main() {
 	mux.HandleFunc("/api/traces/", apiHandler.GetTraceHandler)
 	mux.HandleFunc("/api/dependencies", apiHandler.GetDependenciesHandler)
 
-	fs := http.FileServer(http.Dir("./cmd/collector/static"))
-	mux.Handle("/", fs)
+	staticFS, _ := fs.Sub(staticEmbed, "static")
+	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
 	port := ":8080"
 	log.Printf("Yeager Collector starting on port %s...", port)
